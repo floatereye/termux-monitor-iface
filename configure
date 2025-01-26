@@ -21,10 +21,10 @@ release: all
 	strip -s release/$(TARGET)
 
 install:
-	install -m 755 $(TARGET) /data/data/com.termux/files/usr/bin/
+	install -m 755 $(TARGET) $(PREFIX)/bin/
 
 uninstall:
-	rm -f /data/data/com.termux/files/usr/bin/$(TARGET)
+	rm -f $(PREFIX)/bin/$(TARGET)
 EOL
 
 echo "Configuration complete. Run \"make\" to build, then \"make install\" to install."
