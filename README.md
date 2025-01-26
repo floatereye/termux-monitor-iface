@@ -1,5 +1,9 @@
 Monitors ifaddrs.h addrs->ifa_name for change, and executes specified program.
 
+Install: 
+./configure && make && make install
+
+
 ```
 Usage: ./termux-monitor-iface [OPTIONS]
 Options:
