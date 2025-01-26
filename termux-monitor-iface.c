@@ -12,15 +12,31 @@
 #include <net/if.h>
 #include <time.h>
 
-void print_help(const char *progname, int throttle_delay) {
+typedef struct {
+    int verbose;
+    int very_verbose;
+    int throttle_delay;
+    int daemon;
+    char *exec_command;
+    char **exec_args;
+} Config;
+
+typedef struct {
+    char prev_ifa_name[IFNAMSIZ];
+    char ifa_name[IFNAMSIZ];
+    int changed;
+    time_t last_exec_time;
+} InterfaceState;
+
+void print_help(const char *progname, Config config) {
     printf("Usage: %s [OPTIONS]\n", progname);
     printf("Options:\n");
     printf("  -h            Show this help message\n");
     printf("  -v            Enable verbose mode (print interface and IP address)\n");
-    printf("  -vv           Enable very verbose mode (only this mode prints output)\n");
+    printf("  -vv           Enable very verbose mode (print detailed output)\n");
     printf("  -D            Run as a daemon\n");
     printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
-    printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", throttle_delay);
+    printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
     exit(EXIT_SUCCESS);
 }
 
@@ -33,10 +49,10 @@ void daemonize() {
     }
 
     if (pid > 0) {
-        exit(EXIT_SUCCESS); // Parent exits
+        exit(EXIT_SUCCESS);
     }
 
-    // Child process
+
     if (setsid() < 0) {
         perror("setsid");
         exit(EXIT_FAILURE);
@@ -51,10 +67,10 @@ void daemonize() {
     }
 
     if (pid > 0) {
-        exit(EXIT_SUCCESS); // First child exits
+        exit(EXIT_SUCCESS);
     }
 
-    // Second child continues
+
     umask(0);
 
     if (chdir("/") < 0) {
@@ -66,27 +82,27 @@ void daemonize() {
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
 
-    open("/dev/null", O_RDONLY); // Redirect stdin
-    open("/dev/null", O_WRONLY); // Redirect stdout
-    open("/dev/null", O_RDWR);  // Redirect stderr
+    open("/dev/null", O_RDONLY);
+    open("/dev/null", O_WRONLY);
+    open("/dev/null", O_RDWR);
 }
 
-void execute_command(char *command, char **args, const char *ifa_name) {
+void execute_command(InterfaceState *iface_state, Config config) {
     pid_t pid = fork();
 
-    if (pid == 0) { // Child process
+    if (pid == 0) {
         size_t len = 0;
-        while (args[len]) len++; // Count additional args
+        while (config.exec_args[len]) len++;
 
         char **exec_args = malloc((len + 2) * sizeof(char *));
-        exec_args[0] = command;
-        exec_args[1] = (char *)ifa_name;
+        exec_args[0] = config.exec_command;
+        exec_args[1] = iface_state->ifa_name;
         for (size_t i = 0; i < len; i++) {
-            exec_args[i + 2] = args[i];
+            exec_args[i + 2] = config.exec_args[i];
         }
         exec_args[len + 2] = NULL;
 
-        execvp(command, exec_args);
+        execvp(config.exec_command, exec_args);
         perror("execvp");
         free(exec_args);
         exit(EXIT_FAILURE);
@@ -95,101 +111,121 @@ void execute_command(char *command, char **args, const char *ifa_name) {
     }
 }
 
-int main(int argc, char *argv[]) {
-    int opt;
-    int verbose = 0;
-    int very_verbose = 0;
-    int daemon = 0;
-    int throttle_delay = 5; // Default throttle delay in seconds
-    char *exec_command = NULL;
-    char **exec_args = NULL;
+int fetch_interfaces(struct ifaddrs **addrs) {
+    if (getifaddrs(addrs) == -1) {
+        perror("getifaddrs");
+        return -1;
+    }
+    return 0;
+}
 
-    while ((opt = getopt(argc, argv, "hvVDe:t:")) != -1) {
+int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config config) {
+
+    iface_state->changed = 0;
+    for (struct ifaddrs *tmp = addrs; tmp && tmp->ifa_addr; tmp = tmp->ifa_next) {
+        if (tmp->ifa_addr->sa_family != AF_INET) continue;
+        if (strcmp(tmp->ifa_name, "lo") == 0) continue;
+
+        strncpy(iface_state->ifa_name, tmp->ifa_name, IFNAMSIZ);
+
+	time_t current_time = time(NULL);
+	if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
+        iface_state->last_exec_time = current_time;
+
+        if (config.very_verbose) {
+            printf("%s\n", iface_state->ifa_name);
+        }
+        if (strcmp(iface_state->prev_ifa_name, iface_state->ifa_name) != 0) {
+            strncpy(iface_state->prev_ifa_name, iface_state->ifa_name, IFNAMSIZ);
+            iface_state->changed = 1;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void handle_interface_change(InterfaceState *iface_state, Config config) {
+    if (iface_state->changed) {
+
+        if (config.verbose && !config.very_verbose) {
+            printf("%s\n", iface_state->ifa_name);
+        }
+
+        if (config.exec_command) {
+            execute_command(iface_state, config);
+        }
+    }
+}
+
+void monitor_interfaces(Config config) {
+    struct ifaddrs *addrs;
+    InterfaceState iface_state = {0};
+
+    if (fetch_interfaces(&addrs) == -1 || !addrs || !addrs->ifa_name) {
+        fprintf(stderr, "No interfaces found.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    strncpy(iface_state.prev_ifa_name, addrs->ifa_name, IFNAMSIZ);
+    strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ);
+    iface_state.last_exec_time = 0;
+    iface_state.changed = 0;
+
+    while (1) {
+        if (fetch_interfaces(&addrs) == -1) {
+            continue;
+        }
+
+        interface_changed(addrs, &iface_state, config);
+        handle_interface_change(&iface_state, config);
+
+        freeifaddrs(addrs);
+        sleep(1);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    Config config = {0};
+    config.throttle_delay = 3;
+
+    int opt;
+    while ((opt = getopt(argc, argv, "hvvDt:e:")) != -1) {
         switch (opt) {
             case 'h':
-                print_help(argv[0], throttle_delay);
+                print_help(argv[0], config);
                 break;
             case 'v':
-                verbose++;
-                break;
-            case 'V':
-                verbose++;
+                if (config.verbose == 1) {
+                    config.very_verbose = 1;
+                }
+                config.verbose = 1;
                 break;
             case 'D':
-                daemon = 1;
+                config.daemon = 1;
                 break;
             case 'e':
-                exec_command = optarg;
-                exec_args = &argv[optind];
+                config.exec_command = optarg;
+                config.exec_args = &argv[optind];
                 break;
             case 't':
-                throttle_delay = atoi(optarg);
-                if (throttle_delay <= 0) {
+                config.throttle_delay = atoi(optarg);
+                if (config.throttle_delay <= 0) {
                     fprintf(stderr, "Throttle delay must be a positive integer.\n");
                     exit(EXIT_FAILURE);
                 }
                 break;
             default:
-                print_help(argv[0], throttle_delay);
+                print_help(argv[0], config);
                 break;
         }
     }
 
-    if (verbose > 1) {
-        very_verbose = 1;
-    }
-
-    if (daemon) {
+    if (config.daemon) {
         daemonize();
     }
 
-    struct ifaddrs *addrs, *tmp;
-    getifaddrs(&addrs);
-
-    if (addrs && addrs->ifa_name) {
-        char prev_ifa_name[IFNAMSIZ] = "";
-        strncpy(prev_ifa_name, addrs->ifa_name, IFNAMSIZ);
-        prev_ifa_name[IFNAMSIZ - 1] = '\0';
-
-        time_t last_exec_time = 0;
-        int iface_changed = 0;
-
-        while (1) {
-            iface_changed = 0;
-            getifaddrs(&addrs);
-            for (tmp = addrs; tmp && tmp->ifa_addr; tmp = tmp->ifa_next) {
-                if (tmp->ifa_addr->sa_family != AF_INET) continue;
-                if (strcmp(tmp->ifa_name, "lo") == 0) continue;
-
-                if (strcmp(prev_ifa_name, tmp->ifa_name) != 0) {
-                    iface_changed = 1;
-                    strncpy(prev_ifa_name, tmp->ifa_name, IFNAMSIZ);
-                    if (very_verbose) {
-		        printf("%s\n", tmp->ifa_name);
-                    }
-                }
-            }
-
-            time_t current_time = time(NULL);
-            if (iface_changed && difftime(current_time, last_exec_time) >= throttle_delay) {
-                if (verbose && !very_verbose) {
-                  printf("%s\n", prev_ifa_name);
-                }
-                if (exec_command) {
-                  if (very_verbose) {
-                    printf("executing: %s\n", exec_command);
-                  }
-                  execute_command(exec_command, exec_args, prev_ifa_name);
-                }
-                last_exec_time = current_time;
-            }
-            freeifaddrs(addrs);
-            sleep(1);
-        }
-    } else {
-        fprintf(stderr, "No interfaces found.\n");
-        exit(EXIT_FAILURE);
-    }
+    monitor_interfaces(config);
 
     return EXIT_SUCCESS;
 }
+
