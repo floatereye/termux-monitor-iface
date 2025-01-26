@@ -6,7 +6,7 @@ Install:
 ```
 
 ```
-Usage: ./termux-monitor-iface [OPTIONS]
+Usage: termux-monitor-iface [OPTIONS]
 Options:
   -h            Show this help message
   -v            Enable verbose mode (print interface and IP address)
