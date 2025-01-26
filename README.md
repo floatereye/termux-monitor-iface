@@ -1,7 +1,12 @@
 Monitors ifaddrs.h addrs->ifa_name for change, and executes specified program.
 
 ```
-Usage: ./termux-monitor-iface [OPTIONS]
+Install: 
+./configure && make && make install
+```
+
+```
+Usage: termux-monitor-iface [OPTIONS]
 Options:
   -h            Show this help message
   -v            Enable verbose mode (print interface and IP address)
