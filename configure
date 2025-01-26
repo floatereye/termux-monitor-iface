@@ -1,27 +1,30 @@
 #!/bin/bash
 
-cat << CONFIG > Makefile
-CC = gcc
+cat <<'EOL' > Makefile
+CC = clang
 CFLAGS = -Wall -O2
-LDFLAGS =
+TARGET = termux-monitor-iface
+SRC = $(TARGET).c
 
-all: termux-monitor-iface
+all: $(TARGET)
 
-termux-monitor-iface: termux-monitor-iface.c
-	\$(CC) \$(CFLAGS) -o termux-monitor-iface termux-monitor-iface.c \$(LDFLAGS)
-
-install: termux-monitor-iface
-	install -d \$(PREFIX)/bin
-	install termux-monitor-iface \$(PREFIX)/bin
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
 
 clean:
-	rm -f termux-monitor-iface
+	rm -f $(TARGET)
 	rm -rf release/
 
 release: all
 	mkdir -p release/
-	cp termux-monitor-iface release/
-	strip -s release/termux-monitor-iface
+	cp $(TARGET) release/
+	strip -s release/$(TARGET)
 
-CONFIG
+install:
+	install -m 755 $(TARGET) /data/data/com.termux/files/usr/bin/
+
+uninstall:
+	rm -f /data/data/com.termux/files/usr/bin/$(TARGET)
+EOL
+
 echo "Configuration complete. Run \"make\" to build, then \"make install\" to install."
