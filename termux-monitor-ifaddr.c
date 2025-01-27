@@ -191,10 +191,10 @@ int main(int argc, char *argv[]) {
     config.throttle_delay = 3;
 
     int option;
-		static struct option long_options[] = {
-		 	{"help", no_argument, 0, 'h'},
-			{0, 0, 0, 0}
-		};
+    static struct option long_options[] = {
+      {"help", no_argument, 0, 'h'},
+      {0, 0, 0, 0}
+    };
 
     int ignore = 0;
     while ((option = getopt_long(argc, argv, "hvvDt:e:", long_options, NULL)) != -1 && !ignore) {
