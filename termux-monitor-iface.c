@@ -186,9 +186,9 @@ void print_help(const char *progname, Config config) {
 }
 
 int main(int argc, char *argv[]) {
+
     Config config = {0};
     config.throttle_delay = 3;
-
 
     int option;
 		static struct option long_options[] = {
