@@ -13,5 +13,5 @@ Options:
   -vv           Enable very verbose mode (only this mode prints output)
   -D            Run as a daemon
   -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)
-  -t <seconds>  Set throttle delay for command execution (default: 5 seconds)
+  -t <seconds>  Set throttle delay for change detection
 ```
