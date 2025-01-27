@@ -28,18 +28,6 @@ typedef struct {
     time_t last_exec_time;
 } InterfaceState;
 
-void print_help(const char *progname, Config config) {
-    printf("Usage: %s [OPTIONS]\n", progname);
-    printf("Options:\n");
-    printf("  -h            Show this help message\n");
-    printf("  -v            Enable verbose mode (print interface and IP address)\n");
-    printf("  -vv           Enable very verbose mode (print detailed output)\n");
-    printf("  -D            Run as a daemon\n");
-    printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
-    printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
-    exit(EXIT_SUCCESS);
-}
-
 void daemonize() {
     pid_t pid = fork();
 
@@ -128,8 +116,8 @@ int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config
 
         strncpy(iface_state->ifa_name, tmp->ifa_name, IFNAMSIZ);
 
-	time_t current_time = time(NULL);
-	if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
+				time_t current_time = time(NULL);
+				if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
         iface_state->last_exec_time = current_time;
 
         if (config.very_verbose) {
@@ -184,12 +172,25 @@ void monitor_interfaces(Config config) {
     }
 }
 
+void print_help(const char *progname, Config config) {
+    printf("Usage: %s [OPTIONS]\n", progname);
+    printf("Options:\n");
+    printf("  -h            Show this help message\n");
+    printf("  -v            Enable verbose mode (print interface and IP address)\n");
+    printf("  -vv           Enable very verbose mode (print detailed output)\n");
+    printf("  -D            Run as a daemon\n");
+    printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
+    printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[]) {
     Config config = {0};
     config.throttle_delay = 3;
 
     int opt;
-    while ((opt = getopt(argc, argv, "hvvDt:e:")) != -1) {
+    int ignore = 0;
+    while ((opt = getopt(argc, argv, "hvvDt:e:")) != -1 && !ignore) {
         switch (opt) {
             case 'h':
                 print_help(argv[0], config);
@@ -206,6 +207,7 @@ int main(int argc, char *argv[]) {
             case 'e':
                 config.exec_command = optarg;
                 config.exec_args = &argv[optind];
+                ignore = 1;
                 break;
             case 't':
                 config.throttle_delay = atoi(optarg);
