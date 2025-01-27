@@ -192,8 +192,8 @@ int main(int argc, char *argv[]) {
 
     int option;
 		static struct option long_options[] = {
-		   {"help", no_argument, 0, 'h'},
-		   {0, 0, 0, 0}
+		 	{"help", no_argument, 0, 'h'},
+			{0, 0, 0, 0}
 		};
 
     int ignore = 0;
