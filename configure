@@ -3,7 +3,7 @@
 cat <<'EOL' > Makefile
 CC = clang
 CFLAGS = -Wall -O2
-TARGET = termux-monitor-iface
+TARGET = termux-monitor-ifaddr
 SRC = $(TARGET).c
 
 all: $(TARGET)
