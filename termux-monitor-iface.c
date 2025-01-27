@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <getopt.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -175,12 +176,12 @@ void monitor_interfaces(Config config) {
 void print_help(const char *progname, Config config) {
     printf("Usage: %s [OPTIONS]\n", progname);
     printf("Options:\n");
-    printf("  -h            Show this help message\n");
     printf("  -v            Enable verbose mode (print interface and IP address)\n");
     printf("  -vv           Enable very verbose mode (print detailed output)\n");
     printf("  -D            Run as a daemon\n");
     printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
     printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
+    printf("  -h, --help    Show this help message\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -188,13 +189,16 @@ int main(int argc, char *argv[]) {
     Config config = {0};
     config.throttle_delay = 3;
 
-    int opt;
+
+    int option;
+		static struct option long_options[] = {
+		   {"help", no_argument, 0, 'h'},
+		   {0, 0, 0, 0}
+		};
+
     int ignore = 0;
-    while ((opt = getopt(argc, argv, "hvvDt:e:")) != -1 && !ignore) {
-        switch (opt) {
-            case 'h':
-                print_help(argv[0], config);
-                break;
+    while ((option = getopt_long(argc, argv, "hvvDt:e:", long_options, NULL)) != -1 && !ignore) {
+        switch (option) {
             case 'v':
                 if (config.verbose == 1) {
                     config.very_verbose = 1;
@@ -215,6 +219,9 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "Throttle delay must be a positive integer.\n");
                     exit(EXIT_FAILURE);
                 }
+                break;
+            case 'h':
+                print_help(argv[0], config);
                 break;
             default:
                 print_help(argv[0], config);
