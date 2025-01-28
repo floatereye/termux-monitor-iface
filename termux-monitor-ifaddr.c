@@ -26,7 +26,7 @@ typedef struct {
     char prev_ifa_name[IFNAMSIZ];
     char ifa_name[IFNAMSIZ];
     int changed;
-    time_t last_exec_time;
+    time_t last_changed_time;
 } InterfaceState;
 
 void daemonize() {
@@ -118,8 +118,8 @@ int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config
         strncpy(iface_state->ifa_name, tmp->ifa_name, IFNAMSIZ);
 
         time_t current_time = time(NULL);
-        if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
-        iface_state->last_exec_time = current_time;
+        if (difftime(current_time, iface_state->last_changed_time) < config.throttle_delay) continue;
+        iface_state->last_changed_time = current_time;
 
         if (config.very_verbose) {
             printf("%s\n", iface_state->ifa_name);
@@ -157,7 +157,7 @@ void monitor_interfaces(Config config) {
 
     strncpy(iface_state.prev_ifa_name, addrs->ifa_name, IFNAMSIZ);
     strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ);
-    iface_state.last_exec_time = 0;
+    iface_state.last_changed_time = 0;
     iface_state.changed = 0;
 
     while (1) {
