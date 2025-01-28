@@ -148,13 +148,12 @@ void handle_interface_change(InterfaceState *iface_state, Config config) {
 
 void monitor_interfaces(Config config) {
     struct ifaddrs *addrs;
-    InterfaceState iface_state = {0};
-
     if (fetch_interfaces(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
         exit(EXIT_FAILURE);
     }
 
+    InterfaceState iface_state = {0};
     strncpy(iface_state.prev_ifa_name, addrs->ifa_name, IFNAMSIZ);
     strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ);
     iface_state.last_changed_time = 0;
