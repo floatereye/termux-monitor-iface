@@ -110,7 +110,7 @@ int fetch_interfaces(struct ifaddrs **addrs) {
 
 int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config config) {
 
-    iface_state->changed = 0;
+   iface_state->changed = 0;
     for (struct ifaddrs *tmp = addrs; tmp && tmp->ifa_addr; tmp = tmp->ifa_next) {
         if (tmp->ifa_addr->sa_family != AF_INET) continue;
         if (strcmp(tmp->ifa_name, "lo") == 0) continue;
