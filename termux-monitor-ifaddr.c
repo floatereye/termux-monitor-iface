@@ -109,13 +109,13 @@ void execute_command(InterfaceState *iface_state, Config config) {
         waitpid(pid, &status, 0);
         if (!WIFEXITED(status)) {
             if (WIFSIGNALED(status)) {
-                printf("Child process terminated by signal %d\n", WTERMSIG(status));
+                printf("%s Child process terminated by signal %d\n", config.exec_command, WTERMSIG(status));
             } else {
-                printf("Child process terminated abnormally.\n");
+                printf("%s Child process terminated abnormally.\n", config.exec_command);
                 exit(EXIT_FAILURE);
             }
         } else if (WEXITSTATUS(status) != 0) {
-            printf("Child process exited with error status %d\n", WEXITSTATUS(status));
+            printf("%s Child process exited with error status %d\n", config.exec_command, WEXITSTATUS(status));
         }
     }
 }
