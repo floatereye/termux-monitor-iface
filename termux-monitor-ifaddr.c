@@ -134,7 +134,7 @@ int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config
 }
 
 void handle_interface_change(InterfaceState *iface_state, Config config) {
-    if (! iface_state->changed) continue;
+    if (! iface_state->changed) return;
 
     if (config.verbose && !config.very_verbose) {
         printf("%s\n", iface_state->ifa_name);
