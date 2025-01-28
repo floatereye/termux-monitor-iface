@@ -134,17 +134,17 @@ int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config
 }
 
 void handle_interface_change(InterfaceState *iface_state, Config config) {
-    if (iface_state->changed) {
+    if (! iface_state->changed) continue;
 
-        if (config.verbose && !config.very_verbose) {
-            printf("%s\n", iface_state->ifa_name);
-        }
+    if (config.verbose && !config.very_verbose) {
+        printf("%s\n", iface_state->ifa_name);
+    }
 
-        if (config.exec_command) {
-            execute_command(iface_state, config);
-        }
+    if (config.exec_command) {
+        execute_command(iface_state, config);
     }
 }
+
 
 void monitor_interfaces(Config config) {
     struct ifaddrs *addrs;
