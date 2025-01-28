@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -78,14 +79,22 @@ void daemonize() {
 
 void execute_command(InterfaceState *iface_state, Config config) {
     pid_t pid = fork();
-
-    if (pid == 0) {
+    if (pid < 0) {
+        perror("fork");
+        return;
+    } else if (pid == 0) {
         size_t len = 0;
         while (config.exec_args[len]) len++;
 
-        char **exec_args = malloc((len + 2) * sizeof(char *));
+        char **exec_args = malloc((len + 3) * sizeof(char *));
+        if (!exec_args) {
+            perror("malloc");
+            exit(EXIT_FAILURE);
+        }
+
         exec_args[0] = config.exec_command;
         exec_args[1] = iface_state->ifa_name;
+
         for (size_t i = 0; i < len; i++) {
             exec_args[i + 2] = config.exec_args[i];
         }
@@ -95,8 +104,19 @@ void execute_command(InterfaceState *iface_state, Config config) {
         perror("execvp");
         free(exec_args);
         exit(EXIT_FAILURE);
-    } else if (pid < 0) {
-        perror("fork");
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+        if (!WIFEXITED(status)) {
+            if (WIFSIGNALED(status)) {
+                printf("Child process terminated by signal %d\n", WTERMSIG(status));
+            } else {
+                printf("Child process terminated abnormally.\n");
+                exit(EXIT_FAILURE);
+            }
+        } else if (WEXITSTATUS(status) != 0) {
+            printf("Child process exited with error status %d\n", WEXITSTATUS(status));
+        }
     }
 }
 
