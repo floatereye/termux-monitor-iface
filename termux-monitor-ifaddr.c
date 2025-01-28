@@ -117,8 +117,8 @@ int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config
 
         strncpy(iface_state->ifa_name, tmp->ifa_name, IFNAMSIZ);
 
-				time_t current_time = time(NULL);
-				if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
+        time_t current_time = time(NULL);
+        if (difftime(current_time, iface_state->last_exec_time) < config.throttle_delay) continue;
         iface_state->last_exec_time = current_time;
 
         if (config.very_verbose) {
