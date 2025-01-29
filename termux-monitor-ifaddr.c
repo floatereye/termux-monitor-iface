@@ -1,24 +1,25 @@
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
 #include <ifaddrs.h>
-#include <sys/wait.h>
+#include <net/if.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <getopt.h>
-#include <signal.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <net/if.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 typedef struct {
     int verbose;
     int very_verbose;
     int throttle_delay;
     int daemon;
+    char *log_file;
     char *exec_command;
     char **exec_args;
 } Config;
@@ -27,12 +28,48 @@ typedef struct {
     char prev_ifa_name[IFNAMSIZ];
     char ifa_name[IFNAMSIZ];
     int changed;
-    time_t last_changed_time;
+    double time_last_poll;
 } InterfaceState;
 
-void daemonize() {
-    pid_t pid = fork();
 
+void redirect_log(const char *log_file) {
+    for (int fd = sysconf(_SC_OPEN_MAX); fd >= 0; fd--) {
+        close(fd);
+    }
+
+    int fd = open(log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd == -1) {
+        perror("Failed to open log file");
+        exit(EXIT_FAILURE);
+    }
+
+    if (dup2(fd, STDOUT_FILENO) == -1) {
+        perror("Failed to redirect stdout");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (dup2(fd, STDERR_FILENO) == -1) {
+        perror("Failed to redirect stderr");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
+    close(fd);
+
+    printf("Logging to %s\n", log_file);
+}
+
+void daemonize(Config config) {
+    if (config.log_file == NULL) {
+        fprintf(stderr, "Invalid configuration: log_file is NULL\n");
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
         exit(EXIT_FAILURE);
@@ -41,7 +78,6 @@ void daemonize() {
     if (pid > 0) {
         exit(EXIT_SUCCESS);
     }
-
 
     if (setsid() < 0) {
         perror("setsid");
@@ -50,17 +86,6 @@ void daemonize() {
 
     signal(SIGHUP, SIG_IGN);
 
-    pid = fork();
-    if (pid < 0) {
-        perror("fork");
-        exit(EXIT_FAILURE);
-    }
-
-    if (pid > 0) {
-        exit(EXIT_SUCCESS);
-    }
-
-
     umask(0);
 
     if (chdir("/") < 0) {
@@ -68,16 +93,10 @@ void daemonize() {
         exit(EXIT_FAILURE);
     }
 
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-
-    open("/dev/null", O_RDONLY);
-    open("/dev/null", O_WRONLY);
-    open("/dev/null", O_RDWR);
+    redirect_log(config.log_file);
 }
 
-void execute_command(InterfaceState *iface_state, Config config) {
+void execute_command(InterfaceState iface_state, Config config) {
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -93,7 +112,7 @@ void execute_command(InterfaceState *iface_state, Config config) {
         }
 
         exec_args[0] = config.exec_command;
-        exec_args[1] = iface_state->ifa_name;
+        exec_args[1] = iface_state.ifa_name;
 
         for (size_t i = 0; i < len; i++) {
             exec_args[i + 2] = config.exec_args[i];
@@ -101,8 +120,8 @@ void execute_command(InterfaceState *iface_state, Config config) {
         exec_args[len + 2] = NULL;
 
         execvp(config.exec_command, exec_args);
-        perror("execvp");
         free(exec_args);
+        perror("execvp");
         exit(EXIT_FAILURE);
     } else {
         int status;
@@ -120,44 +139,42 @@ void execute_command(InterfaceState *iface_state, Config config) {
     }
 }
 
-int fetch_interfaces(struct ifaddrs **addrs) {
-    if (getifaddrs(addrs) == -1) {
-        perror("getifaddrs");
-        return -1;
+void interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config config) {
+
+    if (difftime(time(NULL), iface_state->time_last_poll) < config.throttle_delay) return;
+
+    if (config.very_verbose) {
+       printf("%s\n", iface_state->ifa_name);
     }
-    return 0;
-}
+    iface_state->time_last_poll = time(NULL);
 
-int interface_changed(struct ifaddrs *addrs, InterfaceState *iface_state, Config config) {
+    if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
+        fprintf(stderr, "No interfaces found.\n");
+        return;
+    }
 
-   iface_state->changed = 0;
-   for (struct ifaddrs *tmp = addrs; tmp && tmp->ifa_addr; tmp = tmp->ifa_next) {
+    iface_state->changed = 0;
+    for (struct ifaddrs *tmp = addrs; tmp; tmp = tmp->ifa_next) {
+
         if (tmp->ifa_addr->sa_family != AF_INET) continue;
         if (strcmp(tmp->ifa_name, "lo") == 0) continue;
 
-        strncpy(iface_state->ifa_name, tmp->ifa_name, IFNAMSIZ);
-
-        time_t current_time = time(NULL);
-        if (difftime(current_time, iface_state->last_changed_time) < config.throttle_delay) continue;
-        iface_state->last_changed_time = current_time;
-
-        if (config.very_verbose) {
-            printf("%s\n", iface_state->ifa_name);
-        }
+        snprintf(iface_state->ifa_name, IFNAMSIZ, "%s", tmp->ifa_name);
         if (strcmp(iface_state->prev_ifa_name, iface_state->ifa_name) != 0) {
-            strncpy(iface_state->prev_ifa_name, iface_state->ifa_name, IFNAMSIZ);
+
+            snprintf(iface_state->prev_ifa_name, IFNAMSIZ, "%s", iface_state->ifa_name);
             iface_state->changed = 1;
-            return 1;
+            break;
         }
     }
-    return 0;
+    freeifaddrs(addrs);
 }
 
-void handle_interface_change(InterfaceState *iface_state, Config config) {
-    if (! iface_state->changed) return;
+void handle_interface_change(InterfaceState iface_state, Config config) {
+    if (! iface_state.changed) return;
 
     if (config.verbose && !config.very_verbose) {
-        printf("%s\n", iface_state->ifa_name);
+        printf("%s\n", iface_state.ifa_name);
     }
 
     if (config.exec_command) {
@@ -168,36 +185,79 @@ void handle_interface_change(InterfaceState *iface_state, Config config) {
 
 void monitor_interfaces(Config config) {
     struct ifaddrs *addrs;
-    if (fetch_interfaces(&addrs) == -1 || !addrs || !addrs->ifa_name) {
+    if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     InterfaceState iface_state = {0};
-    strncpy(iface_state.prev_ifa_name, addrs->ifa_name, IFNAMSIZ);
-    strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ);
-    iface_state.last_changed_time = 0;
+
+    strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ - 1);
+    iface_state.ifa_name[IFNAMSIZ - 1] = '\0';
+    strncpy(iface_state.prev_ifa_name, iface_state.ifa_name, IFNAMSIZ - 1);
+    iface_state.prev_ifa_name[IFNAMSIZ - 1] = '\0';
+
+    iface_state.time_last_poll = time(NULL);
     iface_state.changed = 0;
+    freeifaddrs(addrs);
 
     while (1) {
-        if (fetch_interfaces(&addrs) == -1) {
-            continue;
-        }
-
         interface_changed(addrs, &iface_state, config);
-        handle_interface_change(&iface_state, config);
+        handle_interface_change(iface_state, config);
 
-        freeifaddrs(addrs);
-        sleep(1);
+        nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
     }
 }
 
-void print_help(const char *progname, Config config) {
+
+void normalize_path(char *path) {
+    char *src = path;
+    char *dst = path;
+
+    while (*src) {
+        if (src[0] == '.' && src[1] == '/' && (src == path || *(src - 1) == '/')) {
+            src += 2;
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
+char *get_absolute_path(const char progname[], Config config) {
+    static char absolute_path[255];
+    static char log_file[255];
+
+    if (!config.log_file) {
+        strcat(log_file, progname);
+        strcat(log_file, ".log");
+    }
+
+    if (! getcwd(absolute_path, sizeof(absolute_path))) {
+        perror("getcwd failed");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t len = strlen(absolute_path);
+    if (len + 1 + strlen(log_file) >= 255) {
+        fprintf(stderr, "Path too long\n");
+        exit(EXIT_FAILURE);
+    }
+
+    strcat(absolute_path, "/");
+    strcat(absolute_path, log_file);
+
+    normalize_path(absolute_path);
+    return absolute_path;
+}
+
+void print_help(const char progname[], Config config) {
     printf("Usage: %s [OPTIONS]\n", progname);
     printf("Options:\n");
     printf("  -v            Enable verbose mode (print interface and IP address)\n");
     printf("  -vv           Enable very verbose mode (print detailed output)\n");
     printf("  -D            Run as a daemon\n");
+    printf("  -l,--logfile  stdin,stdout to %s\n", config.log_file);
     printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
     printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
     printf("  -h, --help    Show this help message\n");
@@ -206,17 +266,20 @@ void print_help(const char *progname, Config config) {
 
 int main(int argc, char *argv[]) {
 
+    const char *progname = argv[0];
+
     Config config = {0};
     config.throttle_delay = 3;
 
     int option;
     static struct option long_options[] = {
+      {"logfile", required_argument, 0, 'l'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}
     };
 
     int ignore = 0;
-    while ((option = getopt_long(argc, argv, "hvvDt:e:", long_options, NULL)) != -1 && !ignore) {
+    while ((option = getopt_long(argc, argv, "hvvDl:t:e:", long_options, NULL)) != -1 && !ignore) {
         switch (option) {
             case 'v':
                 if (config.verbose == 1) {
@@ -227,6 +290,18 @@ int main(int argc, char *argv[]) {
             case 'D':
                 config.daemon = 1;
                 break;
+            case 'l':
+                if (optarg[0] == '-') {
+                    fprintf(stderr, "%s: option: '%s' requires an argument\n", progname, optarg);
+                    print_help(progname, config);
+                    exit(EXIT_FAILURE);
+                }
+                else if(config.daemon == 0) {
+                    fprintf(stderr, "%s: option: '%s' requires -D to be set.\n", progname, optarg);
+                    print_help(progname, config);
+                    exit(EXIT_FAILURE);
+                }
+                config.log_file = optarg;
             case 'e':
                 config.exec_command = optarg;
                 config.exec_args = &argv[optind];
@@ -235,21 +310,28 @@ int main(int argc, char *argv[]) {
             case 't':
                 config.throttle_delay = atoi(optarg);
                 if (config.throttle_delay <= 0) {
-                    fprintf(stderr, "Throttle delay must be a positive integer.\n");
+                    fprintf(stderr, "%s: option: '%s' requires Throttle delay to be a positive integer.\n", progname, optarg);
                     exit(EXIT_FAILURE);
                 }
                 break;
             case 'h':
-                print_help(argv[0], config);
+                print_help(progname, config);
                 break;
             default:
-                print_help(argv[0], config);
+                print_help(progname, config);
                 break;
         }
     }
 
+
+    config.log_file = get_absolute_path(progname, config);
+    if (! config.log_file) {
+        fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
+        return EXIT_SUCCESS;
+    }
+
     if (config.daemon) {
-        daemonize();
+        daemonize(config);
     }
 
     monitor_interfaces(config);
