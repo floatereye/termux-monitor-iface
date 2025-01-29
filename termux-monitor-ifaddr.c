@@ -63,7 +63,7 @@ void log_redirect(const char *log_file) {
     close(fd);
 }
 
-void daemon_init(config_t config) {
+void daemon_init() {
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -323,7 +323,7 @@ int main(int argc, char *argv[]) {
         log_redirect(config.log_file);
 
         if (config.daemon) {
-            daemon_init(config);
+            daemon_init();
         }
     }
 
