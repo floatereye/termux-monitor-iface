@@ -52,8 +52,6 @@ void redirect_log(const char *log_file) {
     setvbuf(stderr, NULL, _IONBF, 0);
 
     close(fd);
-
-    printf("Logging to %s\n", log_file);
 }
 
 void daemonize(Config config) {
