@@ -254,12 +254,12 @@ char *get_absolute_path(const char progname[], Config config) {
 void print_help(const char progname[], Config config) {
     printf("Usage: %s [OPTIONS]\n", progname);
     printf("Options:\n");
-    printf("  -v            Enable verbose mode (print interface and IP address)\n");
-    printf("  -vv           Enable very verbose mode (print detailed output)\n");
+    printf("  -v            Enable verbose mode (prints interface changes)\n");
+    printf("  -vv           Enable very verbose mode (continuously displays current interface)\n");
     printf("  -D            Run as a daemon\n");
-    printf("  -l,--logfile  stdin,stdout to %s\n", config.log_file);
-    printf("  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)\n");
-    printf("  -t <seconds>  Set throttle delay for command execution (default: %d seconds)\n", config.throttle_delay);
+    printf("  -l,--logfile  Redirect stdin and stdout to a logfile\n");
+    printf("  -e <command>  Execute a command when interface changes\n");
+    printf("  -t <seconds>  Set throttle delay for detecting changes (default: %d seconds)\n", config.throttle_delay);
     printf("  -h, --help    Show this help message\n");
     exit(EXIT_SUCCESS);
 }
