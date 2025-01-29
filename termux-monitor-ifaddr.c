@@ -191,14 +191,14 @@ void monitor_interfaces(Config config) {
     freeifaddrs(addrs);
 
     while (1) {
-		    if (difftime(time(NULL), iface_state.time_last_poll) < config.throttle_delay) continue;
+        if (difftime(time(NULL), iface_state.time_last_poll) < config.throttle_delay) continue;
 
-		    if (config.very_verbose) {
-		       printf("%s\n", iface_state.ifa_name);
-    		}
+        if (config.very_verbose) {
+           printf("%s\n", iface_state.ifa_name);
+        }
 
         poll_ifaddrs(&iface_state);
-		    iface_state.time_last_poll = time(NULL);
+        iface_state.time_last_poll = time(NULL);
 
         handle_interface_change(iface_state, config);
 
