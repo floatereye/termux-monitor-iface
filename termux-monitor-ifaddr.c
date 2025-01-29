@@ -1,4 +1,5 @@
 #include <getopt.h>
+#include <fcntl.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <signal.h>
