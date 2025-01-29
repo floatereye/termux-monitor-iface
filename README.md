@@ -1,4 +1,4 @@
-Monitors ifaddrs.h addrs->ifa_name for change, and executes specified program.
+Monitors ifaddrs.h addrs->ifa_name for changes and executes a specified program.
 
 ```
 Install: 
