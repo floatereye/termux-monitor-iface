@@ -316,16 +316,16 @@ int main(int argc, char *argv[]) {
 
 
     if (config.log_file || config.daemon) {
+        if (config.daemon) {
+            daemonize(config);
+        }
+
         config.log_file = get_absolute_path(progname, config);
         if (! config.log_file) {
             fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
             return EXIT_SUCCESS;
         }
         redirect_log(config.log_file);
-    }
-
-    if (config.daemon) {
-        daemonize(config);
     }
 
     monitor_interfaces(config);
