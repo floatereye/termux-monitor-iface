@@ -9,9 +9,9 @@ Install:
 Usage: termux-monitor-ifaddr [OPTIONS]
 Options:
   -h            Show this help message
-  -v            Enable verbose mode (print interface and IP address)
-  -vv           Enable very verbose mode (only this mode prints output)
+  -v            Enable verbose mode (prints interface changes)  
+  -vv           Enable very verbose mode (continuously displays current interface) 
   -D            Run as a daemon
-  -e <command>  Execute a command when interface changes (detached, all parameters after -e passed)
-  -t <seconds>  Set throttle delay for change
+  -e <command>  Execute a command when the interface changes
+  -t <seconds>  Set throttle delay for detecting changes
 ```
