@@ -30,6 +30,15 @@ typedef struct {
 
 
 void log_redirect(const char *log_file) {
+    if (log_file == NULL) {
+        fprintf(stderr, "Invalid configuration: log_file is NULL\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int fd = sysconf(_SC_OPEN_MAX); fd >= 0; fd--) {
+        close(fd);
+    }
+
     int fd = open(log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd == -1) {
         perror("Failed to open log file");
@@ -55,11 +64,6 @@ void log_redirect(const char *log_file) {
 }
 
 void daemon_init(config_t config) {
-    if (config.log_file == NULL) {
-        fprintf(stderr, "Invalid config_turation: log_file is NULL\n");
-        exit(EXIT_FAILURE);
-    }
-
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -82,10 +86,6 @@ void daemon_init(config_t config) {
     if (chdir("/") < 0) {
         perror("chdir");
         exit(EXIT_FAILURE);
-    }
-
-    for (int fd = sysconf(_SC_OPEN_MAX); fd >= 0; fd--) {
-        close(fd);
     }
 }
 
@@ -170,7 +170,7 @@ void iface_handle_change(iface_state_t iface_state, config_t config) {
 }
 
 
-void iface_monitor(config_t config) {
+void monitor_interfaces(config_t config) {
     struct ifaddrs *addrs;
     if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
@@ -315,19 +315,19 @@ int main(int argc, char *argv[]) {
 
 
     if (config.log_file || config.daemon) {
-        if (config.daemon) {
-            daemon_init(config);
-        }
-
         config.log_file = path_get_absolute(progname, config);
         if (! config.log_file) {
             fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
             return EXIT_SUCCESS;
         }
         log_redirect(config.log_file);
+
+        if (config.daemon) {
+            daemon_init(config);
+        }
     }
 
-    iface_monitor(config);
+    monitor_interfaces(config);
 
     return EXIT_SUCCESS;
 }
