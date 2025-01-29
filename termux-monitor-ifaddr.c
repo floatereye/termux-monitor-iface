@@ -19,17 +19,17 @@ typedef struct {
     char *log_file;
     char *exec_command;
     char **exec_args;
-} Config;
+} config_t;
 
 typedef struct {
     char prev_ifa_name[IFNAMSIZ];
     char ifa_name[IFNAMSIZ];
     int changed;
     double time_last_poll;
-} InterfaceState;
+} iface_state_t;
 
 
-void redirect_log(const char *log_file) {
+void log_redirect(const char *log_file) {
     int fd = open(log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd == -1) {
         perror("Failed to open log file");
@@ -54,9 +54,9 @@ void redirect_log(const char *log_file) {
     close(fd);
 }
 
-void daemonize(Config config) {
+void daemon_init(config_t config) {
     if (config.log_file == NULL) {
-        fprintf(stderr, "Invalid configuration: log_file is NULL\n");
+        fprintf(stderr, "Invalid config_turation: log_file is NULL\n");
         exit(EXIT_FAILURE);
     }
 
@@ -89,7 +89,7 @@ void daemonize(Config config) {
     }
 }
 
-void execute_command(InterfaceState iface_state, Config config) {
+void cmd_exec(iface_state_t iface_state, config_t config) {
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -132,7 +132,7 @@ void execute_command(InterfaceState iface_state, Config config) {
     }
 }
 
-void poll_ifaddrs(InterfaceState *iface_state) {
+void iface_poll(iface_state_t *iface_state) {
 
     struct ifaddrs *addrs;
     if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
@@ -157,7 +157,7 @@ void poll_ifaddrs(InterfaceState *iface_state) {
     freeifaddrs(addrs);
 }
 
-void handle_interface_change(InterfaceState iface_state, Config config) {
+void iface_handle_change(iface_state_t iface_state, config_t config) {
     if (! iface_state.changed) return;
 
     if (config.verbose && !config.very_verbose) {
@@ -165,19 +165,19 @@ void handle_interface_change(InterfaceState iface_state, Config config) {
     }
 
     if (config.exec_command) {
-        execute_command(iface_state, config);
+        cmd_exec(iface_state, config);
     }
 }
 
 
-void monitor_interfaces(Config config) {
+void monitor_interfaces(config_t config) {
     struct ifaddrs *addrs;
     if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
         return;
     }
 
-    InterfaceState iface_state = {0};
+    iface_state_t iface_state = {0};
     strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ - 1);
     iface_state.ifa_name[IFNAMSIZ - 1] = '\0';
     strncpy(iface_state.prev_ifa_name, iface_state.ifa_name, IFNAMSIZ - 1);
@@ -194,17 +194,17 @@ void monitor_interfaces(Config config) {
            printf("%s\n", iface_state.ifa_name);
         }
 
-        poll_ifaddrs(&iface_state);
+        iface_poll(&iface_state);
         iface_state.time_last_poll = time(NULL);
 
-        handle_interface_change(iface_state, config);
+        iface_handle_change(iface_state, config);
 
         nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
     }
 }
 
 
-void normalize_path(char *path) {
+void path_normalize(char *path) {
     char *src = path;
     char *dst = path;
 
@@ -218,7 +218,7 @@ void normalize_path(char *path) {
     *dst = '\0';
 }
 
-char *get_absolute_path(const char progname[], Config config) {
+char *path_get_absolute(const char progname[], config_t config) {
     static char absolute_path[255];
     static char log_file[255];
 
@@ -242,11 +242,11 @@ char *get_absolute_path(const char progname[], Config config) {
     strcat(absolute_path, "/");
     strcat(absolute_path, log_file);
 
-    normalize_path(absolute_path);
+    path_normalize(absolute_path);
     return absolute_path;
 }
 
-void print_help(const char progname[], Config config) {
+void print_help(const char progname[], config_t config) {
     printf("Usage: %s [OPTIONS]\n", progname);
     printf("Options:\n");
     printf("  -v            Enable verbose mode (prints interface changes)\n");
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
 
     const char *progname = argv[0];
 
-    Config config = {0};
+    config_t config = {0};
     config.throttle_delay = 3;
 
     int option;
@@ -316,15 +316,15 @@ int main(int argc, char *argv[]) {
 
     if (config.log_file || config.daemon) {
         if (config.daemon) {
-            daemonize(config);
+            daemon_init(config);
         }
 
-        config.log_file = get_absolute_path(progname, config);
+        config.log_file = path_get_absolute(progname, config);
         if (! config.log_file) {
             fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
             return EXIT_SUCCESS;
         }
-        redirect_log(config.log_file);
+        log_redirect(config.log_file);
     }
 
     monitor_interfaces(config);
