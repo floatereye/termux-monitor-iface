@@ -29,10 +29,6 @@ typedef struct {
 
 
 void redirect_log(const char *log_file) {
-    for (int fd = sysconf(_SC_OPEN_MAX); fd >= 0; fd--) {
-        close(fd);
-    }
-
     int fd = open(log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd == -1) {
         perror("Failed to open log file");
@@ -89,7 +85,9 @@ void daemonize(Config config) {
         exit(EXIT_FAILURE);
     }
 
-    redirect_log(config.log_file);
+    for (int fd = sysconf(_SC_OPEN_MAX); fd >= 0; fd--) {
+        close(fd);
+    }
 }
 
 void execute_command(InterfaceState iface_state, Config config) {
@@ -229,6 +227,7 @@ char *get_absolute_path(const char progname[], Config config) {
         strcat(log_file, progname);
         strcat(log_file, ".log");
     }
+    else strcat(log_file, config.log_file);
 
     if (! getcwd(absolute_path, sizeof(absolute_path))) {
         perror("getcwd failed");
@@ -293,11 +292,6 @@ int main(int argc, char *argv[]) {
                     print_help(progname, config);
                     exit(EXIT_FAILURE);
                 }
-                else if(config.daemon == 0) {
-                    fprintf(stderr, "%s: option: '%s' requires -D to be set.\n", progname, optarg);
-                    print_help(progname, config);
-                    exit(EXIT_FAILURE);
-                }
                 config.log_file = optarg;
             case 'e':
                 config.exec_command = optarg;
@@ -321,10 +315,13 @@ int main(int argc, char *argv[]) {
     }
 
 
-    config.log_file = get_absolute_path(progname, config);
-    if (! config.log_file) {
-        fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
-        return EXIT_SUCCESS;
+    if (config.log_file || config.daemon) {
+        config.log_file = get_absolute_path(progname, config);
+        if (! config.log_file) {
+            fprintf(stderr, "%s: Failed to determine absolute path\n", progname);
+            return EXIT_SUCCESS;
+        }
+        redirect_log(config.log_file);
     }
 
     if (config.daemon) {
