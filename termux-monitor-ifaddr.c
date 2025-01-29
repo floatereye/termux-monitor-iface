@@ -1,15 +1,15 @@
+#include <stdio.h>
 #include <getopt.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
-#include <unistd.h>
 
 typedef struct {
     int verbose;
@@ -178,13 +178,12 @@ void iface_monitor(config_t config) {
     }
 
     iface_state_t iface_state = {0};
-    strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ - 1);
-    iface_state.ifa_name[IFNAMSIZ - 1] = '\0';
-    strncpy(iface_state.prev_ifa_name, iface_state.ifa_name, IFNAMSIZ - 1);
-    iface_state.prev_ifa_name[IFNAMSIZ - 1] = '\0';
-
     iface_state.time_last_poll = time(NULL);
     iface_state.changed = 0;
+
+    snprintf(iface_state.ifa_name, IFNAMSIZ, "%s", addrs->ifa_name);
+    snprintf(iface_state.prev_ifa_name, IFNAMSIZ, "%s", iface_state.ifa_name);
+
     freeifaddrs(addrs);
 
     while (1) {
