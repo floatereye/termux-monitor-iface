@@ -135,8 +135,9 @@ void execute_command(InterfaceState iface_state, Config config) {
     }
 }
 
-void poll_ifaddrs(struct ifaddrs *addrs, InterfaceState *iface_state) {
+void poll_ifaddrs(InterfaceState *iface_state) {
 
+    struct ifaddrs *addrs;
     if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
         return;
@@ -187,7 +188,6 @@ void monitor_interfaces(Config config) {
     }
 
     InterfaceState iface_state = {0};
-
     strncpy(iface_state.ifa_name, addrs->ifa_name, IFNAMSIZ - 1);
     iface_state.ifa_name[IFNAMSIZ - 1] = '\0';
     strncpy(iface_state.prev_ifa_name, iface_state.ifa_name, IFNAMSIZ - 1);
@@ -198,7 +198,7 @@ void monitor_interfaces(Config config) {
     freeifaddrs(addrs);
 
     while (1) {
-        poll_ifaddrs(addrs, &iface_state);
+        poll_ifaddrs(&iface_state);
         handle_interface_change(&iface_state, config);
 
         nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
