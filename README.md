@@ -1,4 +1,4 @@
-Monitors changes in ifaddrs.h interface names (ifa_name) and executes a specified program, intended for non-root users in Termux.
+Detects when network connections change (like WiFi or mobile data turning on or off) and runs a chosen program, designed for Termux users without root access.
 
 ```
 Install: 
