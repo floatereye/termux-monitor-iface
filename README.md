@@ -1,4 +1,4 @@
-Monitors ifaddrs.h addrs->ifa_name for changes and executes a specified program.
+Detects when network connections change (like WiFi or mobile data turning on or off) and runs a chosen program, designed for Termux users without root access.
 
 ```
 Install: 
