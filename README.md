@@ -1,4 +1,4 @@
-Monitors ifaddrs.h addrs->ifa_name for changes and executes a specified program.
+Monitors changes in ifaddrs.h interface names (ifa_name) and executes a specified program, intended for non-root users in Termux.
 
 ```
 Install: 
