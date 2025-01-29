@@ -170,7 +170,7 @@ void iface_handle_change(iface_state_t iface_state, config_t config) {
 }
 
 
-void monitor_interfaces(config_t config) {
+void iface_monitor(config_t config) {
     struct ifaddrs *addrs;
     if (getifaddrs(&addrs) == -1 || !addrs || !addrs->ifa_name) {
         fprintf(stderr, "No interfaces found.\n");
@@ -327,7 +327,7 @@ int main(int argc, char *argv[]) {
         log_redirect(config.log_file);
     }
 
-    monitor_interfaces(config);
+    iface_monitor(config);
 
     return EXIT_SUCCESS;
 }
