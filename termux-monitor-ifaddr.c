@@ -160,22 +160,15 @@ void poll_ifaddrs(InterfaceState *iface_state) {
     freeifaddrs(addrs);
 }
 
-void handle_interface_change(InterfaceState *iface_state, Config config) {
-    if (difftime(time(NULL), iface_state->time_last_poll) < config.throttle_delay) return;
-
-    if (config.very_verbose) {
-       printf("%s\n", iface_state->ifa_name);
-    }
-    iface_state->time_last_poll = time(NULL);
-
-    if (! iface_state->changed) return;
+void handle_interface_change(InterfaceState iface_state, Config config) {
+    if (! iface_state.changed) return;
 
     if (config.verbose && !config.very_verbose) {
-        printf("%s\n", iface_state->ifa_name);
+        printf("%s\n", iface_state.ifa_name);
     }
 
     if (config.exec_command) {
-        execute_command(*iface_state, config);
+        execute_command(iface_state, config);
     }
 }
 
@@ -198,8 +191,16 @@ void monitor_interfaces(Config config) {
     freeifaddrs(addrs);
 
     while (1) {
+		    if (difftime(time(NULL), iface_state.time_last_poll) < config.throttle_delay) continue;
+
+		    if (config.very_verbose) {
+		       printf("%s\n", iface_state.ifa_name);
+    		}
+
         poll_ifaddrs(&iface_state);
-        handle_interface_change(&iface_state, config);
+		    iface_state.time_last_poll = time(NULL);
+
+        handle_interface_change(iface_state, config);
 
         nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
     }
